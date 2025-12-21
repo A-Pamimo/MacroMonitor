@@ -1,0 +1,5 @@
+{
+  "name": "Real-Time Macro Monitor",
+  "description": "An automated dashboard tracking high-frequency economic indicators using the FRED API and Gemini AI for economic analysis.",
+  "requestFramePermissions": []
+}
