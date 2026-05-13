@@ -33,7 +33,7 @@ export const analyzeEconomy = async (data: EconomicSummary, region: string): Pro
     `;
 
     const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
+      model: 'gemini-2.5-flash',
       contents: prompt,
       config: {
         thinkingConfig: { thinkingBudget: 0 }, // Fast response
