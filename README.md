@@ -1,20 +1,51 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# MacroMonitor
 
-# Run and deploy your AI Studio app
+A real-time macroeconomic dashboard for the US and Canada. Pulls live indicators — inflation, employment, GDP, yield curves, policy rates, retail sales, housing — from FRED and surfaces them in a single readable interface.
 
-This contains everything you need to run your app locally.
+## Why
 
-View your app in AI Studio: https://ai.studio/apps/drive/1ALgEIL6wQbM4QKiAHWFrOxKpE8TFCEho
+Official economic data in Canada is published with a 3–6 month lag. By the time the headline numbers land, the picture has already moved. MacroMonitor pulls from live sources so the dashboard reflects the most recent observations available, not last quarter's snapshot.
 
-## Run Locally
+## What's in it
 
-**Prerequisites:**  Node.js
+- **Dual-region view** — toggle between US and Canadian indicators
+- **Key metrics** — yield curve, CPI (YoY), unemployment, GDP growth, policy rate, retail sales, housing starts
+- **Recession signal** — visual warning when the US 10Y–2Y curve inverts
+- **AI Macro Analyst** — Gemini-generated executive summary of the current cycle
+- **Macro Dictionary** — plain-language explanations of each indicator
 
+## Stack
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+- Vite + React 19 + TypeScript
+- Recharts for visualization
+- FRED API for economic series (US series + OECD-mirrored Canadian series)
+- Google Gemini for the AI analyst panel
+
+## Run locally
+
+Prerequisites: Node.js 18+
+
+```bash
+npm install
+```
+
+Create a `.env.local` with your Gemini key (optional — the dashboard works without it, but the AI Analyst panel won't):
+
+```
+GEMINI_API_KEY=your_key_here
+```
+
+Then:
+
+```bash
+npm run dev
+```
+
+The app runs on http://localhost:3000.
+
+## Build
+
+```bash
+npm run build
+npm run preview
+```
