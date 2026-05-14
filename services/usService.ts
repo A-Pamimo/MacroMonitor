@@ -1,9 +1,7 @@
-import { FredObservation, FredSeriesResponse } from '../types';
+import { FredSeriesResponse } from '../types';
 
 const FRED_API_KEY = 'f78c612c602685f87c4471e00ec28ce1';
 const FRED_BASE_URL = 'https://api.stlouisfed.org/fred/series/observations';
-// Using AllOrigins as a reliable CORS proxy for FRED
-const PROXY_URL = 'https://api.allorigins.win/raw?url=';
 
 interface SeriesConfig {
   id: string;
@@ -11,32 +9,15 @@ interface SeriesConfig {
   units?: string; // 'lin' = levels, 'pc1' = percent change from year ago
 }
 
-// Expanded US Configuration
 const US_CONFIGS: SeriesConfig[] = [
   { id: 'yieldCurve', seriesId: 'T10Y2Y', units: 'lin' },
   { id: 'unemployment', seriesId: 'UNRATE', units: 'lin' },
   { id: 'cpi', seriesId: 'CPIAUCSL', units: 'pc1' },
   { id: 'fedFunds', seriesId: 'FEDFUNDS', units: 'lin' },
   { id: 'gdp', seriesId: 'GDPC1', units: 'pc1' },
-  // Expanded Metrics
-  { id: 'retailSales', seriesId: 'RSXFS', units: 'pc1' }, // Advance Retail Sales (YoY)
-  { id: 'housing', seriesId: 'HOUST', units: 'lin' }      // Housing Starts (New Residential Construction)
+  { id: 'retailSales', seriesId: 'RSXFS', units: 'pc1' },
+  { id: 'housing', seriesId: 'HOUST', units: 'lin' }
 ];
-
-const smartFetch = async (url: string): Promise<Response> => {
-  try {
-    const response = await fetch(url);
-    if (response.ok) return response;
-    throw new Error(`Direct fetch failed: ${response.status}`);
-  } catch (e) {
-    const proxyTarget = `${PROXY_URL}${encodeURIComponent(url)}`;
-    const proxyResponse = await fetch(proxyTarget);
-    if (!proxyResponse.ok) {
-       throw new Error(`Proxy fetch failed: ${proxyResponse.statusText}`);
-    }
-    return proxyResponse;
-  }
-};
 
 export const fetchUSData = async () => {
   const startDate = new Date();
@@ -53,18 +34,15 @@ export const fetchUSData = async () => {
     });
 
     const url = `${FRED_BASE_URL}?${params.toString()}`;
-    
+
     try {
-      const response = await smartFetch(url);
-      const data: FredSeriesResponse = await response.json();
-      
-      if (!data.observations) {
-        // Fallback for empty responses
-        console.warn(`No observations for ${config.id}`);
+      const response = await fetch(url);
+      if (!response.ok) {
+        console.warn(`FRED ${config.id} returned ${response.status}`);
         return { id: config.id, observations: [] };
       }
-
-      return { id: config.id, observations: data.observations };
+      const data: FredSeriesResponse = await response.json();
+      return { id: config.id, observations: data.observations || [] };
     } catch (error) {
       console.warn(`Failed to fetch US series ${config.id}:`, error);
       return { id: config.id, observations: [] };
