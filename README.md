@@ -1,6 +1,8 @@
 # MacroMonitor
 
-A real-time macroeconomic dashboard for the US and Canada. Pulls live indicators — inflation, employment, GDP, yield curves, policy rates, retail sales, housing — from FRED and surfaces them in a single readable interface.
+**Live:** https://a-pamimo.github.io/MacroMonitor/
+
+A real-time macroeconomic dashboard for the US and Canada. Pulls live indicators — inflation, employment, GDP, yield curves, policy rates — from FRED and surfaces them in a single readable interface.
 
 ## Why
 
@@ -9,7 +11,8 @@ Official economic data in Canada is published with a 3–6 month lag. By the tim
 ## What's in it
 
 - **Dual-region view** — toggle between US and Canadian indicators
-- **Key metrics** — yield curve, CPI (YoY), unemployment, GDP growth, policy rate, retail sales, housing starts
+- **US indicators** — yield curve (10Y–2Y), CPI YoY, unemployment, GDP growth, Fed funds rate, retail sales, housing starts
+- **Canada indicators** — 10Y bond yield, CPI YoY, unemployment, BoC policy rate
 - **Recession signal** — visual warning when the US 10Y–2Y curve inverts
 - **AI Macro Analyst** — Gemini-generated executive summary of the current cycle
 - **Macro Dictionary** — plain-language explanations of each indicator
@@ -18,8 +21,9 @@ Official economic data in Canada is published with a 3–6 month lag. By the tim
 
 - Vite + React 19 + TypeScript
 - Recharts for visualization
-- FRED API for economic series (US series + OECD-mirrored Canadian series)
+- FRED API for economic series, proxied via corsproxy.io (FRED doesn't send CORS headers)
 - Google Gemini for the AI analyst panel
+- GitHub Actions → GitHub Pages for deployment
 
 ## Run locally
 
@@ -49,3 +53,12 @@ The app runs on http://localhost:3000.
 npm run build
 npm run preview
 ```
+
+## Deployment
+
+Pushes to `main` trigger `.github/workflows/deploy.yml`, which builds and publishes to GitHub Pages. The `GEMINI_API_KEY` repository secret is injected at build time.
+
+## Known limitations
+
+- Canada is currently shown with 4 indicators instead of 7 — FRED has deprecated the OECD-MEI series previously used for Canadian GDP, retail sales, and housing starts. The Statistics Canada API is the next step for full parity.
+- API requests go through a public CORS proxy (FRED doesn't enable CORS). For production reliability this should be replaced with a self-hosted proxy (e.g. a Cloudflare Worker).
