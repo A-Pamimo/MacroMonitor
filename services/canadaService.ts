@@ -13,9 +13,9 @@ const CA_CONFIGS = [
     { id: 'unemployment', seriesId: 'LRHUTTTTCAM156S', units: 'lin' },
     { id: 'cpi', seriesId: 'CANCPIALLMINMEI', units: 'pc1' },
     { id: 'fedFunds', seriesId: 'IRSTCB01CAM156N', units: 'lin' },
-    { id: 'gdp', seriesId: 'NAEXKP01CAQ652S', units: 'pc1' },
-    { id: 'retailSales', seriesId: 'CANSARTLMINMEI', units: 'pc1' },
-    { id: 'housing', seriesId: 'CANHSTTOTDSMEI', units: 'lin' }
+    // GDP, retail sales, and housing starts for Canada were sourced from FRED's
+    // OECD-MEI series, which FRED has been deprecating. Removed until a stable
+    // alternative source (e.g. Statistics Canada API) is wired up.
 ];
 
 const fetchViaProxy = async (url: string): Promise<Response> => {
