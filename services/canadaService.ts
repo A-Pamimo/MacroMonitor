@@ -3,6 +3,11 @@ import { FredSeriesResponse } from '../types';
 const FRED_API_KEY = 'f78c612c602685f87c4471e00ec28ce1';
 const FRED_BASE_URL = 'https://api.stlouisfed.org/fred/series/observations';
 
+const PROXIES = [
+  (url: string) => `https://corsproxy.io/?url=${encodeURIComponent(url)}`,
+  (url: string) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
+];
+
 const CA_CONFIGS = [
     { id: 'yieldCurve', seriesId: 'IRLTLT01CAM156N', units: 'lin' },
     { id: 'unemployment', seriesId: 'LRHUTTTTCAM156S', units: 'lin' },
@@ -12,6 +17,18 @@ const CA_CONFIGS = [
     { id: 'retailSales', seriesId: 'CANSARTLMINMEI', units: 'pc1' },
     { id: 'housing', seriesId: 'CANHSTTOTDSMEI', units: 'lin' }
 ];
+
+const fetchViaProxy = async (url: string): Promise<Response> => {
+  for (const proxy of PROXIES) {
+    try {
+      const response = await fetch(proxy(url));
+      if (response.ok) return response;
+    } catch {
+      // try next proxy
+    }
+  }
+  throw new Error('All proxies failed');
+};
 
 export const fetchCanadaData = async () => {
     const startDate = new Date();
@@ -30,11 +47,7 @@ export const fetchCanadaData = async () => {
       const url = `${FRED_BASE_URL}?${params.toString()}`;
 
       try {
-        const response = await fetch(url);
-        if (!response.ok) {
-          console.warn(`FRED ${config.id} returned ${response.status}`);
-          return { id: config.id, observations: [] };
-        }
+        const response = await fetchViaProxy(url);
         const data: FredSeriesResponse = await response.json();
         return { id: config.id, observations: data.observations || [] };
       } catch (error) {
