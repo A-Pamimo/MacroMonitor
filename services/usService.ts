@@ -3,10 +3,17 @@ import { FredSeriesResponse } from '../types';
 const FRED_API_KEY = 'f78c612c602685f87c4471e00ec28ce1';
 const FRED_BASE_URL = 'https://api.stlouisfed.org/fred/series/observations';
 
+// FRED's API doesn't send CORS headers, so browser calls must go through a proxy.
+// We try corsproxy.io first, then fall back to AllOrigins.
+const PROXIES = [
+  (url: string) => `https://corsproxy.io/?url=${encodeURIComponent(url)}`,
+  (url: string) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
+];
+
 interface SeriesConfig {
   id: string;
   seriesId: string;
-  units?: string; // 'lin' = levels, 'pc1' = percent change from year ago
+  units?: string;
 }
 
 const US_CONFIGS: SeriesConfig[] = [
@@ -18,6 +25,18 @@ const US_CONFIGS: SeriesConfig[] = [
   { id: 'retailSales', seriesId: 'RSXFS', units: 'pc1' },
   { id: 'housing', seriesId: 'HOUST', units: 'lin' }
 ];
+
+const fetchViaProxy = async (url: string): Promise<Response> => {
+  for (const proxy of PROXIES) {
+    try {
+      const response = await fetch(proxy(url));
+      if (response.ok) return response;
+    } catch {
+      // try next proxy
+    }
+  }
+  throw new Error('All proxies failed');
+};
 
 export const fetchUSData = async () => {
   const startDate = new Date();
@@ -36,11 +55,7 @@ export const fetchUSData = async () => {
     const url = `${FRED_BASE_URL}?${params.toString()}`;
 
     try {
-      const response = await fetch(url);
-      if (!response.ok) {
-        console.warn(`FRED ${config.id} returned ${response.status}`);
-        return { id: config.id, observations: [] };
-      }
+      const response = await fetchViaProxy(url);
       const data: FredSeriesResponse = await response.json();
       return { id: config.id, observations: data.observations || [] };
     } catch (error) {
