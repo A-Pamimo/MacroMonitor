@@ -1,69 +1,95 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { fetchAllIndicators, Region } from './services/fredService';
 import { EconomicIndicator } from './types';
+import { deriveVerdict } from './services/verdictService';
 import MetricCard from './components/MetricCard';
 import MainChart from './components/MainChart';
 import AIAnalyst from './components/AIAnalyst';
-import { Activity, BarChart3, AlertOctagon, Globe, BookOpen, RefreshCw } from 'lucide-react';
+import VerdictBanner from './components/VerdictBanner';
+import MacroDictionary from './components/MacroDictionary';
+import { Activity, AlertOctagon, RefreshCw } from 'lucide-react';
 
-// Weg Palette Reference:
-// navy: "#0B1F3B", gold: "#D4AF37", positive: "#16A34A", risk: "#DC2626", slate: "#334155"
+// Palette Reference (see tailwind.config in index.html):
+// ink #0B1F3B · gold #B8912E/#D4AF37 · good #15803D · watch #B45309 · risk #B91C1C
 
 const getMetadata = (region: Region): Record<string, Partial<EconomicIndicator>> => ({
   yieldCurve: {
     title: region === 'US' ? 'Yield Curve (10Y-2Y)' : '10Y Gov Bond Yield',
     unit: '%',
-    description: region === 'US' 
+    description: region === 'US'
       ? 'A negative value here has predicted every recent recession.'
       : 'The interest rate the government pays to borrow for 10 years.',
-    color: '#D4AF37', 
+    color: '#B8912E',
     frequency: region === 'US' ? 'Daily' : 'Monthly'
   },
   unemployment: {
     title: 'Unemployment Rate',
     unit: '%',
     description: 'The percentage of the total workforce that cannot find a job.',
-    color: '#334155', 
+    color: '#334155',
     frequency: 'Monthly'
   },
   cpi: {
     title: 'Inflation (CPI)',
     unit: '%',
     description: 'How much prices for goods and services have risen over the last year.',
-    color: '#DC2626', 
+    color: '#B91C1C',
     frequency: 'Monthly'
   },
   fedFunds: {
     title: region === 'US' ? 'Fed Interest Rate' : 'BoC Policy Rate',
     unit: '%',
-    description: region === 'US' 
+    description: region === 'US'
       ? 'The base interest rate set by the Fed. High rates cool the economy.'
       : 'The base interest rate set by the Bank of Canada.',
-    color: '#0B1F3B', 
+    color: '#0B1F3B',
     frequency: region === 'US' ? 'Monthly' : 'Daily/Monthly'
   },
   gdp: {
     title: 'GDP Growth',
     unit: '%',
     description: 'The overall speed at which the economy is growing (or shrinking).',
-    color: '#16A34A', 
+    color: '#15803D',
     frequency: 'Quarterly'
   },
   retailSales: {
     title: 'Retail Sales',
     unit: '%',
     description: 'Year-over-year change in consumer spending on retail goods.',
-    color: '#F59E0B',
+    color: '#B45309',
     frequency: 'Monthly'
   },
   housing: {
     title: 'Housing Starts',
-    unit: region === 'US' ? 'k' : '', // US is in thousands, Canada is raw units or index
+    unit: region === 'US' ? 'k' : '',
     description: 'New residential construction projects started. A leading indicator.',
-    color: '#8B5CF6',
+    color: '#7C3AED',
     frequency: 'Monthly'
   }
 });
+
+// Order the cards deliberately: recession-relevant leads.
+const CARD_ORDER = ['yieldCurve', 'cpi', 'unemployment', 'gdp', 'retailSales', 'housing'];
+const INVERSE_KEYS = new Set(['yieldCurve', 'cpi', 'unemployment']);
+
+const timeAgo = (d: Date | null): string => {
+  if (!d) return 'just now';
+  const secs = Math.floor((Date.now() - d.getTime()) / 1000);
+  if (secs < 60) return 'just now';
+  const mins = Math.floor(secs / 60);
+  if (mins < 60) return `${mins} min ago`;
+  const hrs = Math.floor(mins / 60);
+  return `${hrs} hr ago`;
+};
+
+// Skeleton mirrors the real MetricCard shape so data resolves in place.
+const SkeletonCard: React.FC = () => (
+  <div className="rounded-2xl border border-line bg-card p-5">
+    <div className="h-2.5 w-24 rounded-full bg-paper-2 animate-pulse" />
+    <div className="h-9 w-28 rounded-lg bg-paper-2 animate-pulse mt-5" />
+    <div className="h-14 rounded-lg bg-gradient-to-t from-paper-2 to-transparent animate-pulse mt-4" />
+  </div>
+);
 
 const App: React.FC = () => {
   const [region, setRegion] = useState<Region>('US');
@@ -72,6 +98,8 @@ const App: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [selectedChart, setSelectedChart] = useState<string>('yieldCurve');
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const [nowTick, setNowTick] = useState(0); // re-render the "x min ago" label
 
   const currentMetadata = useMemo(() => getMetadata(region), [region]);
 
@@ -89,12 +117,12 @@ const App: React.FC = () => {
               date: obs.date,
               value: parseFloat(obs.value)
             }))
-            .filter(d => !isNaN(d.value)); 
+            .filter(d => !isNaN(d.value));
 
           if (cleanData.length === 0) return;
           const latest = cleanData[cleanData.length - 1];
           const previous = cleanData[cleanData.length - 2];
-          
+
           processedData[id] = {
             id,
             title: currentMetadata[id]?.title || id,
@@ -105,13 +133,14 @@ const App: React.FC = () => {
             description: currentMetadata[id]?.description || '',
             frequency: currentMetadata[id]?.frequency || '',
             color: currentMetadata[id]?.color || '#0B1F3B',
-            seriesId: '' 
+            seriesId: ''
           };
         });
         setData(processedData);
+        setLastUpdated(new Date());
       } catch (e) {
         console.error("Failed to load dashboard data", e);
-        setError("Unable to retrieve economic data. The source may be unavailable or the region is not supported at this time.");
+        setError("We couldn't reach the economic data source. It may be temporarily unavailable, or this region isn't supported right now.");
       } finally {
         setLoading(false);
       }
@@ -119,7 +148,12 @@ const App: React.FC = () => {
     loadData();
   }, [region, currentMetadata, refreshTrigger]);
 
-  // Prepare data for AI summary
+  // Keep the "updated x min ago" label fresh without refetching.
+  useEffect(() => {
+    const t = setInterval(() => setNowTick(n => n + 1), 60000);
+    return () => clearInterval(t);
+  }, []);
+
   const summaryData = useMemo(() => {
     if (Object.keys(data).length === 0) return null;
     return {
@@ -131,212 +165,139 @@ const App: React.FC = () => {
     };
   }, [data]);
 
+  const verdict = useMemo(() => deriveVerdict(data, region), [data, region]);
   const activeChartData = data[selectedChart];
+  const orderedKeys = CARD_ORDER.filter(k => data[k]);
 
-  const handleRetry = () => {
-    setRefreshTrigger(prev => prev + 1);
-  };
+  const handleRetry = () => setRefreshTrigger(prev => prev + 1);
 
   return (
-    <div className="min-h-screen bg-[#F7F6F2] text-[#0B1F3B] pb-12 font-sans">
+    <div className="min-h-screen bg-paper text-ink pb-16 font-sans">
       {/* Header */}
-      <header className="border-b border-[#E5E7EB] bg-white/80 backdrop-blur-md sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+      <header className="border-b border-line bg-card/80 backdrop-blur-md sticky top-0 z-50">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-3">
           <div className="flex items-center gap-3">
-            <div className="p-2 bg-[#0B1F3B] rounded-lg shadow-sm">
-              <Activity className="text-[#D4AF37]" size={20} />
+            <div className="p-2 bg-ink rounded-lg shadow-sm">
+              <Activity className="text-gold-bright" size={20} />
             </div>
             <div>
-              <h1 className="text-xl font-bold text-[#0B1F3B] tracking-tight">Macro Monitor</h1>
-              <p className="text-xs text-[#64748B]">Real-Time Economic Dashboard</p>
+              <h1 className="text-xl font-semibold text-ink tracking-tight leading-none">Macro Monitor</h1>
+              <p className="text-xs text-muted mt-0.5">Real-Time Economic Dashboard</p>
             </div>
           </div>
-          
-          <div className="flex items-center gap-6">
-            <div className="flex items-center bg-[#F7F6F2] rounded-lg p-1 border border-[#E5E7EB]">
-              <button 
-                onClick={() => setRegion('US')}
-                className={`px-3 py-1 text-xs font-semibold rounded-md transition-all ${region === 'US' ? 'bg-white text-[#0B1F3B] shadow-sm' : 'text-[#64748B] hover:text-[#0B1F3B]'}`}
+
+          <div className="flex items-center gap-2 sm:gap-3">
+            {/* Freshness chip — backs the "real-time" claim + manual refresh */}
+            {!loading && !error && (
+              <button
+                type="button"
+                onClick={handleRetry}
+                aria-label="Refresh data"
+                className="group hidden sm:inline-flex items-center gap-1.5 rounded-full border border-line bg-card px-3 py-1.5 text-xs text-muted hover:text-ink hover:border-gold/50 transition-colors
+                  focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2 focus-visible:ring-offset-paper"
               >
-                US
+                <span className="h-1.5 w-1.5 rounded-full bg-good animate-pulse" aria-hidden="true" />
+                <span className="tabular-nums" key={nowTick}>Updated {timeAgo(lastUpdated)}</span>
+                <RefreshCw size={12} className="group-hover:rotate-180 transition-transform duration-500" />
               </button>
-              <button 
-                onClick={() => setRegion('CA')}
-                className={`px-3 py-1 text-xs font-semibold rounded-md transition-all ${region === 'CA' ? 'bg-white text-[#0B1F3B] shadow-sm' : 'text-[#64748B] hover:text-[#0B1F3B]'}`}
-              >
-                CA
-              </button>
+            )}
+
+            <div className="flex items-center rounded-lg bg-paper-2 p-1 shadow-[inset_0_1px_2px_rgba(11,31,59,.08)]">
+              {(['US', 'CA'] as const).map(r => (
+                <button
+                  key={r}
+                  type="button"
+                  onClick={() => setRegion(r)}
+                  aria-pressed={region === r}
+                  className={`px-3 py-1 text-xs font-semibold rounded-md transition-[background,color,box-shadow] duration-300 ease-spring
+                    focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-1 focus-visible:ring-offset-paper-2
+                    ${region === r ? 'bg-card text-ink shadow-sm' : 'text-muted hover:text-ink'}`}
+                >
+                  {r}
+                </button>
+              ))}
             </div>
           </div>
         </div>
       </header>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        
+
         {loading ? (
-          <div className="flex flex-col items-center justify-center h-64">
-            <div className="w-10 h-10 border-4 border-[#0B1F3B] border-t-transparent rounded-full animate-spin mb-4"></div>
-            <p className="text-[#64748B]">Fetching {region} Economic Data...</p>
+          <div className="space-y-6">
+            {/* Verdict skeleton */}
+            <div className="rounded-2xl border border-line bg-card p-7">
+              <div className="h-2.5 w-40 rounded-full bg-paper-2 animate-pulse" />
+              <div className="h-7 w-2/3 rounded-lg bg-paper-2 animate-pulse mt-3" />
+            </div>
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+              {Array.from({ length: 6 }).map((_, i) => <SkeletonCard key={i} />)}
+            </div>
+            <p className="text-center text-sm text-muted pt-2">Fetching {region} economic data…</p>
           </div>
         ) : error ? (
           <div className="flex flex-col items-center justify-center h-[50vh] text-center p-4">
-             <div className="p-4 bg-red-50 rounded-full mb-4">
-               <AlertOctagon className="text-red-500" size={40} />
-             </div>
-             <h3 className="text-xl font-bold text-[#0B1F3B] mb-2">Connection Failed</h3>
-             <p className="text-[#64748B] max-w-md mb-8">
-               {error}
-             </p>
-             <button 
-               onClick={handleRetry}
-               className="flex items-center gap-2 px-5 py-2.5 bg-[#0B1F3B] hover:bg-[#1e2f4a] text-white font-medium rounded-lg transition-colors shadow-lg shadow-[#0B1F3B]/20"
-             >
-               <RefreshCw size={16} />
-               Retry Connection
-             </button>
+            <div className="p-4 bg-risk/10 rounded-full mb-4">
+              <AlertOctagon className="text-risk" size={40} />
+            </div>
+            <h3 className="text-xl font-semibold text-ink mb-2 tracking-tight">Data temporarily unavailable</h3>
+            <p className="text-muted max-w-md mb-8">{error}</p>
+            <button
+              type="button"
+              onClick={handleRetry}
+              className="inline-flex items-center gap-2 px-5 py-2.5 bg-ink hover:bg-[#07162D] text-paper font-medium rounded-lg transition-transform duration-200 ease-spring hover:-translate-y-0.5 shadow-lg shadow-ink/20
+                focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2 focus-visible:ring-offset-paper"
+            >
+              <RefreshCw size={16} />
+              Try again
+            </button>
           </div>
         ) : (
           <div className="space-y-6">
-            
-            {/* Top Grid: Key Metrics */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-stretch">
-               {data.yieldCurve && (
-                 <div onClick={() => setSelectedChart('yieldCurve')} className="cursor-pointer group h-full">
-                   <MetricCard 
-                     {...data.yieldCurve} 
-                     isWarning={region === 'US' && data.yieldCurve.value < 0}
-                     inverse={true} 
-                   />
-                 </div>
-               )}
-               {data.cpi && (
-                 <div onClick={() => setSelectedChart('cpi')} className="cursor-pointer group h-full">
-                   <MetricCard {...data.cpi} inverse={true} /> 
-                 </div>
-               )}
-               {data.unemployment && (
-                 <div onClick={() => setSelectedChart('unemployment')} className="cursor-pointer group h-full">
-                    <MetricCard {...data.unemployment} inverse={true} /> 
-                 </div>
-               )}
-               {data.gdp && (
-                 <div onClick={() => setSelectedChart('gdp')} className="cursor-pointer group h-full">
-                    <MetricCard {...data.gdp} inverse={false} /> 
-                 </div>
-               )}
-               {/* Expanded Data Rows */}
-               {data.retailSales && (
-                 <div onClick={() => setSelectedChart('retailSales')} className="cursor-pointer group h-full">
-                    <MetricCard {...data.retailSales} inverse={false} /> 
-                 </div>
-               )}
-               {data.housing && (
-                 <div onClick={() => setSelectedChart('housing')} className="cursor-pointer group h-full">
-                    <MetricCard {...data.housing} inverse={false} /> 
-                 </div>
-               )}
+
+            {/* 1 — Verdict: lead with the answer */}
+            {verdict && <VerdictBanner verdict={verdict} region={region} />}
+
+            {/* 2 — Evidence: the metric cards (now the chart selector) */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 items-stretch">
+              {orderedKeys.map((key, i) => (
+                <div
+                  key={key}
+                  className="h-full animate-fade-up"
+                  style={{ animationDelay: `${i * 40}ms` }}
+                >
+                  <MetricCard
+                    {...data[key]}
+                    inverse={INVERSE_KEYS.has(key)}
+                    isWarning={region === 'US' && key === 'yieldCurve' && data[key].value < 0}
+                    selected={selectedChart === key}
+                    onSelect={() => setSelectedChart(key)}
+                  />
+                </div>
+              ))}
             </div>
 
-            {/* Middle Section */}
+            {/* 3 — Deep dive: selected chart + AI analyst */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              
-              {/* Main Chart Column */}
-              <div className="lg:col-span-2 space-y-4">
+              <div className="lg:col-span-2">
                 {activeChartData && (
-                  <MainChart 
+                  <MainChart
                     title={activeChartData.title}
-                    data={activeChartData.data} 
+                    data={activeChartData.data}
                     color={activeChartData.color}
+                    unit={activeChartData.unit}
                     isYieldCurve={region === 'US' && selectedChart === 'yieldCurve'}
                   />
                 )}
-                {/* Metric Selector Buttons */}
-                <div className="flex flex-wrap gap-2">
-                   {Object.keys(data).map(key => (
-                     <button
-                       key={key}
-                       onClick={() => setSelectedChart(key)}
-                       className={`px-3 py-2 text-xs font-semibold rounded-lg border transition-all ${
-                         selectedChart === key 
-                         ? 'bg-[#0B1F3B] border-[#0B1F3B] text-white shadow-md' 
-                         : 'bg-white border-[#E5E7EB] text-[#64748B] hover:border-[#D4AF37] hover:text-[#0B1F3B]'
-                       }`}
-                     >
-                       {data[key].title}
-                     </button>
-                   ))}
-                </div>
               </div>
 
-              {/* Sidebar: AI, Risks, and Macro Guide */}
               <div className="space-y-6">
                 <AIAnalyst data={summaryData} region={region} />
-                
-                {/* Simplified Risk Analysis */}
-                <div className="rounded-xl border border-[#E5E7EB] bg-white p-5 shadow-sm">
-                  <h4 className="text-sm font-bold text-[#0B1F3B] mb-3 flex items-center gap-2">
-                    <AlertOctagon size={16} className="text-[#DC2626]"/>
-                    Is a recession likely?
-                  </h4>
-                  <ul className="space-y-3">
-                    {region === 'US' ? (
-                       <li className="flex items-start gap-3 text-xs text-[#64748B]">
-                        <div className={`mt-0.5 w-2 h-2 rounded-full ${data.yieldCurve?.value < 0 ? 'bg-[#DC2626] animate-pulse' : 'bg-[#16A34A]'}`}></div>
-                        <div>
-                          <span className="block font-semibold text-[#334155]">Yield Curve Signal</span>
-                          {data.yieldCurve?.value < 0 
-                            ? "Red Light: The curve is inverted. This is the single most reliable predictor of a future recession."
-                            : "Green Light: The curve is positive. Financial markets expect normal growth."}
-                        </div>
-                      </li>
-                    ) : (
-                      <li className="flex items-start gap-3 text-xs text-[#64748B]">
-                         <div className={`mt-0.5 w-2 h-2 rounded-full ${data.yieldCurve?.value < 2.5 ? 'bg-[#F59E0B]' : 'bg-[#16A34A]'}`}></div>
-                         <div>
-                           <span className="block font-semibold text-[#334155]">Bond Market Signal</span>
-                           {data.yieldCurve?.value < 2.5 
-                             ? "Caution: Low bond yields suggest investors are worried about long-term growth."
-                             : "Healthy: Bond yields reflect a stable economic outlook."}
-                         </div>
-                      </li>
-                    )}
-                   
-                    <li className="flex items-start gap-3 text-xs text-[#64748B]">
-                      <div className={`mt-0.5 w-2 h-2 rounded-full ${data.cpi?.value > 3 ? 'bg-[#F59E0B]' : 'bg-[#16A34A]'}`}></div>
-                      <div>
-                        <span className="block font-semibold text-[#334155]">Inflation Check</span>
-                        {data.cpi?.value > 2.5 
-                          ? `Prices are rising faster than the target (2%). This hurts purchasing power.`
-                          : "Prices are stable and near the target level."}
-                      </div>
-                    </li>
-                  </ul>
-                </div>
-
-                {/* Macro Dictionary / Guide */}
-                <div className="rounded-xl border border-[#E5E7EB] bg-white p-5 shadow-sm">
-                   <h4 className="text-sm font-bold text-[#0B1F3B] mb-3 flex items-center gap-2">
-                    <BookOpen size={16} className="text-[#2563EB]"/>
-                    Macro Dictionary
-                  </h4>
-                  <div className="space-y-3">
-                    <div className="text-xs">
-                      <span className="font-semibold text-[#334155] block">What is the "Yield Curve"?</span>
-                      <span className="text-[#64748B]">Normally, borrowing money for 10 years costs more than for 2 years. When it's cheaper to borrow for 10 years (an "inverted curve"), it means investors expect the economy to crash soon.</span>
-                    </div>
-                    <div className="text-xs">
-                      <span className="font-semibold text-[#334155] block">Why does the Fed Rate matter?</span>
-                      <span className="text-[#64748B]">It controls the price of money. High rates make loans (mortgages, credit cards) expensive to slow down spending. Low rates make loans cheap to encourage spending.</span>
-                    </div>
-                    <div className="text-xs">
-                      <span className="font-semibold text-[#334155] block">What is "Real" GDP?</span>
-                      <span className="text-[#64748B]">"Real" means adjusted for inflation. If the economy grows 5% but prices rise 5%, you actually grew 0%. Real GDP removes the price increase to show true growth.</span>
-                    </div>
-                  </div>
-                </div>
-
               </div>
             </div>
+
+            {/* 4 — Learn: reference material, collapsed by default */}
+            <MacroDictionary />
 
           </div>
         )}
