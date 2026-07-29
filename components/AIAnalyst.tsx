@@ -8,13 +8,13 @@ interface AIAnalystProps {
 }
 
 const AIAnalyst: React.FC<AIAnalystProps> = ({ data, region }) => {
-  const [analysis, setAnalysis] = useState<string>("");
+  const [analysis, setAnalysis] = useState<string>('');
   const [loading, setLoading] = useState(false);
   const [hasRun, setHasRun] = useState(false);
 
   // Reset analysis when region changes
   useEffect(() => {
-    setAnalysis("");
+    setAnalysis('');
     setHasRun(false);
   }, [region]);
 
@@ -29,51 +29,72 @@ const AIAnalyst: React.FC<AIAnalystProps> = ({ data, region }) => {
 
   if (!data) return null;
 
+  const regionName = region === 'US' ? 'US' : 'Canadian';
+
   return (
-    <div className="w-full rounded-xl border border-[#D4AF37]/30 bg-white p-6 shadow-sm relative overflow-hidden">
-      {/* Subtle gold accent background */}
-      <div className="absolute top-0 right-0 w-32 h-32 bg-[#D4AF37]/5 rounded-full blur-3xl -mr-8 -mt-8 pointer-events-none"></div>
-      
-      <div className="flex justify-between items-center mb-4 relative z-10">
-        <h3 className="text-lg font-bold text-[#0B1F3B] flex items-center gap-2">
-          <Sparkles className="text-[#D4AF37]" size={20} />
+    <div className="w-full rounded-2xl border border-gold/30 bg-card p-6 shadow-[0_1px_2px_rgba(11,31,59,.04),0_16px_40px_-28px_rgba(11,31,59,.3)] relative overflow-hidden">
+      {/* Subtle gold accent glow — this is the brand, keep it */}
+      <div className="absolute top-0 right-0 w-32 h-32 bg-gold-bright/10 rounded-full blur-3xl -mr-8 -mt-8 pointer-events-none" />
+
+      <div className="flex justify-between items-center mb-4 relative z-10 gap-3">
+        <h3 className="text-lg font-semibold text-ink flex items-center gap-2 tracking-tight">
+          <Sparkles className="text-gold-bright" size={20} />
           AI Macro Analyst ({region})
         </h3>
         {!loading && (
-          <button 
+          <button
+            type="button"
             onClick={handleAnalyze}
-            className="flex items-center gap-2 px-3 py-1.5 text-xs font-medium text-[#0B1F3B] bg-[#F7F6F2] hover:bg-[#EEF2F7] border border-[#E5E7EB] rounded-lg transition-colors"
+            className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-ink bg-paper hover:bg-paper-2 border border-line rounded-lg transition-colors
+              focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2 focus-visible:ring-offset-card"
           >
-            {hasRun ? <><RefreshCw size={12}/> Refresh Analysis</> : "Generate Insights"}
+            {hasRun ? (
+              <>
+                <RefreshCw size={12} /> Refresh
+              </>
+            ) : (
+              'Generate insights'
+            )}
           </button>
         )}
       </div>
 
-      <div className="relative z-10 min-h-[80px]">
+      <div className="relative z-10 min-h-[88px]">
         {loading ? (
-          <div className="flex flex-col items-center justify-center py-4 space-y-3">
-            <div className="w-6 h-6 border-2 border-[#D4AF37] border-t-transparent rounded-full animate-spin"></div>
-            <p className="text-sm text-[#64748B] animate-pulse">Analyzing {region === 'US' ? 'US' : 'Canadian'} indicators...</p>
+          // Skeleton that reads as "an answer is forming"
+          <div className="space-y-2.5 py-1" aria-live="polite" aria-busy="true">
+            <span className="sr-only">Analyzing {regionName} indicators…</span>
+            {[100, 94, 97, 72].map((w, i) => (
+              <div
+                key={i}
+                style={{ width: `${w}%`, animationDelay: `${i * 90}ms` }}
+                className="h-3 rounded-full bg-gradient-to-r from-paper-2 via-paper to-paper-2 bg-[length:200%_100%] animate-shimmer"
+              />
+            ))}
           </div>
         ) : hasRun ? (
-          <div className="prose prose-sm max-w-none">
-            <p className="text-[#334155] leading-relaxed font-normal">
-              {analysis}
-            </p>
-            <div className="mt-4 flex items-center gap-2 text-xs text-[#64748B]">
-               <span>Powered by Gemini 3 Flash</span>
+          <div>
+            <p className="text-ink-2 leading-relaxed">{analysis}</p>
+            <div className="mt-4 flex items-center gap-1.5 text-xs text-muted">
+              <Sparkles size={12} className="text-gold" />
+              <span>Powered by Gemini 2.5 Flash</span>
             </div>
           </div>
         ) : (
           <div className="flex flex-col items-center justify-center py-6 text-center">
-            <p className="text-[#64748B] text-sm mb-4">
-              Generate a real-time assessment of the {region === 'US' ? 'US' : 'Canadian'} economy based on current Yields, CPI, and Labor data.
+            <p className="text-muted text-sm mb-4 max-w-xs">
+              Generate a real-time read on the {regionName} economy from current
+              yields, CPI, and labor data.
             </p>
-            <button 
+            <button
+              type="button"
               onClick={handleAnalyze}
-              className="px-5 py-2.5 bg-[#0B1F3B] hover:bg-[#07162D] text-white text-sm font-medium rounded-lg shadow-lg shadow-[#0B1F3B]/10 transition-all hover:translate-y-[-1px]"
+              className="inline-flex items-center gap-2 rounded-lg bg-ink px-5 py-2.5 text-sm font-medium text-paper shadow-[0_8px_20px_-8px_rgba(11,31,59,.5)]
+                transition-transform duration-200 ease-spring hover:-translate-y-0.5 active:translate-y-0 active:scale-[.98]
+                focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2 focus-visible:ring-offset-card"
             >
-              Analyze Economy
+              <Sparkles size={16} className="text-gold-bright" />
+              Analyze economy
             </button>
           </div>
         )}
